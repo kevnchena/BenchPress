@@ -1,5 +1,6 @@
 import cv2
 import mediapipe as mp
+import pandas as pd
 import math
 
 from fontTools.merge.util import first
@@ -125,7 +126,7 @@ while True:
         WRy = int(WR.y * h)
         WRx = int(WR.x * w)
 
-        # 初始化最高最低點
+        # 初始化最高
         if wrist_highest is None or WRy < wrist_highest[1]:
             wrist_highest = (WRx, WRy)
             top_threshold = WRy + top_range
@@ -141,9 +142,12 @@ while True:
     #        wrist_lowest = (WRx, WRy)
     #        bottom_threshold = WRy - bottom_range
     #        first_rep = True
+        #初始化最低點，低一下以肩膀高度為準
         if wrist_lowest is None or WRy > wrist_lowest[1]:
-            wrist_lowest = (WRx, WRy)
-            bottom_threshold = WRy - bottom_range
+            shoulder_idx = 11 if cam_angle == "L" else 12
+            shoulder_y = int(landmarks[shoulder_idx].y * h)
+            wrist_lowest = (WRx, shoulder_y)  # 你可調整這個數值
+            bottom_threshold = wrist_lowest[1] - bottom_range
 
         # 畫出最高、最低點
         if wrist_highest:
@@ -161,10 +165,6 @@ while True:
             region = "top"
         elif WRy >= bottom_threshold:
             region = "bottom"
-        if first_rep == False:
-            region = "middle"
-            first_rep = True
-            print(region,phase)
 
         # 四狀態控制
         if phase == "top" and region == "middle":
@@ -187,8 +187,8 @@ while True:
         elif phase == "concentric" and region == "top":
             phase = "top"
             concentric_end = frame_idx
-            eccentric_time = (eccentric_end - eccentric_start)/fps + threshold_time_padding
-            concentric_time = (concentric_end - concentric_start)/fps + threshold_time_padding
+            eccentric_time = (eccentric_end - eccentric_start)/fps #+ threshold_time_padding
+            concentric_time = (concentric_end - concentric_start)/fps #+ threshold_time_padding
             print("向心結束")
 
             if eccentric_time >= 0.1 and concentric_time >= 0.1:
@@ -220,3 +220,19 @@ print(f"總 reps: {rep_count}")
 print("rep detail:")
 for rep_obj in rep_data_list:
     print(rep_obj)
+
+# ✅ 匯出 CSV 給 Excel 分析
+rep_dict_list = [{
+    "rep": r.rep,
+    "y_high": r.y_high,
+    "y_low": r.y_low,
+    "eccentric_time": round(r.eccentric_time, 3),
+    "concentric_time": round(r.concentric_time, 3),
+    "push_dips": r.push_dips,
+    "score": r.score
+} for r in rep_data_list]
+
+df = pd.DataFrame(rep_dict_list)
+csv_path = f"D://BenchPress_data//{video_name}_elbow_benchpress_reps.csv"
+df.to_csv(csv_path, index=False, encoding="utf-8-sig")
+print(f"✅ 已輸出到 CSV：{csv_path}")
