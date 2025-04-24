@@ -12,6 +12,8 @@ class BPPoint:
     def __init__(self,
                  y_high=0,
                  y_low=0,
+                 depth_high=0.0,
+                 depth_low=0.0,
                  eccentric_time=0.0,
                  concentric_time=0.0,
                  push_dips=False,
@@ -19,6 +21,8 @@ class BPPoint:
                  rep=0):
         self.y_high = y_high
         self.y_low = y_low
+        self.depth_high = depth_high
+        self.depth_low = depth_low
         self.eccentric_time = eccentric_time
         self.concentric_time = concentric_time
         self.push_dips = push_dips
@@ -27,6 +31,7 @@ class BPPoint:
 
     def __repr__(self):
         return (f"BPPoint(y_high={self.y_high}, y_low={self.y_low}, "
+                f" depth_high={self.depth_high:.2f}, depth_low={self.depth_low:.2f}, "
                 f"eccentric_time={self.eccentric_time:.2f}, "
                 f"concentric_time={self.concentric_time:.2f}, "
                 f"push_dips={self.push_dips}, "
@@ -59,6 +64,12 @@ bottom_range = 30
 top_threshold = None
 bottom_threshold = None
 first_rep = False
+concentric_y_traj = []
+
+# 新增：紀錄深度變化
+wrist_shoulder_distance_high = 0.0
+wrist_shoulder_distance_low = 0.0
+
 
 #補償threshold中失去的時間
 if abs(fps - 30) <= 2:
@@ -166,12 +177,22 @@ while True:
             eccentric_start = frame_idx
             print("離心開始")
             y_high = WRy
+            #紀錄肩膀-手腕的距離(high)
+            shoulder_idx = 11 if cam_angle == "L" else 12
+            SH = landmarks[shoulder_idx]
+            shoulder_x, shoulder_y = int(SH.x * w), int(SH.y * h)
+            wrist_shoulder_distance_high = ((WRx - shoulder_x) ** 2 + (WRy - shoulder_y) ** 2) ** 0.5
 
         elif phase == "eccentric" and region == "bottom":
             phase = "bottom"
             eccentric_end = frame_idx
             y_low = WRy
             print("離心結束")
+            # 紀錄肩膀-手腕的距離 (low)
+            shoulder_idx = 11 if cam_angle == "L" else 12
+            SH = landmarks[shoulder_idx]
+            shoulder_x, shoulder_y = int(SH.x * w), int(SH.y * h)
+            wrist_shoulder_distance_low = ((WRx - shoulder_x) ** 2 + (WRy - shoulder_y) ** 2) ** 0.5
 
         elif phase == "bottom" and region == "middle":
             phase = "concentric"
@@ -190,11 +211,14 @@ while True:
                 bp = BPPoint(
                     y_high=y_high,
                     y_low=y_low,
+                    depth_high=wrist_shoulder_distance_high,
+                    depth_low=wrist_shoulder_distance_low,
                     eccentric_time=eccentric_time,
                     concentric_time=concentric_time,
                     rep=rep_count
                 )
                 rep_data_list.append(bp)
+                print(f"第{rep_count}次存入:{bp}")
 
         # 在畫面上顯示
         cv2.putText(frame, f"{region} ({phase})", (40,40),
@@ -220,6 +244,8 @@ rep_dict_list = [{
     "rep": r.rep,
     "y_high": r.y_high,
     "y_low": r.y_low,
+    "depth_high": round(r.depth_high, 2),
+    "depth_low": round(r.depth_low, 2),
     "eccentric_time": round(r.eccentric_time, 3),
     "concentric_time": round(r.concentric_time, 3),
     "push_dips": r.push_dips,

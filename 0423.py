@@ -74,72 +74,54 @@ while True:
         depth_distance = math.sqrt((WRx - SHx)**2 + (WRy - SHy)**2)
 
         # 畫點與骨架
-        for connection in mp_pose.POSE_CONNECTIONS:
-            id1, id2 = connection
-            lm1 = landmarks[id1]
-            lm2 = landmarks[id2]
-            x1, y1 = int(lm1.x * w), int(lm1.y * h)
-            x2, y2 = int(lm2.x * w), int(lm2.y * h)
-            cv2.line(frame, (x1, y1), (x2, y2), (200, 200, 200), 2)
-            cv2.circle(frame, (x1, y1), 4, (255, 255, 255), -1)
-            cv2.circle(frame, (x2, y2), 4, (255, 255, 255), -1)
+    for connection in mp_pose.POSE_CONNECTIONS:
+        id1, id2 = connection
+        lm1 = landmarks[id1]
+        lm2 = landmarks[id2]
+        x1, y1 = int(lm1.x * w), int(lm1.y * h)
+        x2, y2 = int(lm2.x * w), int(lm2.y * h)
+        cv2.line(frame, (x1, y1), (x2, y2), (200, 200, 200), 2)
+        cv2.circle(frame, (x1, y1), 4, (255, 255, 255), -1)
+        cv2.circle(frame, (x2, y2), 4, (255, 255, 255), -1)
 
-        if wrist_highest is None or WRy < wrist_highest[1]:
-            wrist_highest = (WRx, WRy)
-            top_threshold = WRy + top_range
-        # 初始化最低點，第一下以肩膀高度為準
-        if not first_rep and wrist_lowest is None:
-            shoulder_idx = 11 if cam_angle == "L" else 12
-            shoulder_y = int(landmarks[shoulder_idx].y * h)
-            wrist_lowest = (WRx, shoulder_y)  # 你可調整這個數值
-            bottom_threshold = wrist_lowest[1] - bottom_range
-            print(f"[Init] 使用肩膀高度模擬 wrist_lowest：{wrist_lowest}")
-        elif wrist_lowest is None or WRy > wrist_lowest[1]:
-            wrist_lowest = (WRx, WRy)
-            bottom_threshold = WRy - bottom_range
+            # 區域判定與四階段狀態機
+    region = "middle"
+    if WRy <= top_threshold:
+        region = "top"
+    elif WRy >= bottom_threshold:
+        region = "bottom"
 
-                # 區域判定與四階段狀態機
-        region = "middle"
-        if WRy <= top_threshold:
-            region = "top"
-        elif WRy >= bottom_threshold:
-            region = "bottom"
+    if phase == "top" and region == "middle":
+        phase = "eccentric"
+        eccentric_start = frame_idx
+        y_high = WRy
 
-        if phase == "top" and region == "middle":
-            phase = "eccentric"
-            eccentric_start = frame_idx
-            y_high = WRy
+    elif phase == "eccentric" and region == "bottom":
+        phase = "bottom"
+        eccentric_end = frame_idx
+        y_low = WRy
 
-        elif phase == "eccentric" and region == "bottom":
-            phase = "bottom"
-            eccentric_end = frame_idx
-            y_low = WRy
-
-        if phase == "bottom" and region == "middle":
-            phase = "concentric"
-            concentric_start = frame_idx
-            concentric_y_traj = []
-            concentric_depth_traj = []  # ✅ 開始記錄肩腕距離
-
-        elif phase == "concentric" and region == "top":
-            phase = "top"
-            concentric_end = frame_idx
-            eccentric_time = (eccentric_end - eccentric_start)/fps
-            concentric_time = (concentric_end - concentric_start)/fps
-
-            push_dips = any(concentric_y_traj[i] > concentric_y_traj[i-1] + 2 for i in range(1, len(concentric_y_traj)))
-            depth_change = max(concentric_depth_traj) - min(concentric_depth_traj)  # ✅ 計算深度變化
-
-            if eccentric_time >= 0.1 and concentric_time >= 0.1:
-                rep_count += 1
-                bp = BPPoint(y_high=y_high, y_low=y_low, eccentric_time=eccentric_time, concentric_time=concentric_time,
-                             depth_change=depth_change, push_dips=push_dips, rep=rep_count)
-                rep_data_list.append(bp)
-
-        # 向心階段持續記錄
-        if phase == "concentric":
-            concentric_y_traj.append(WRy)
-            concentric_depth_traj.append(depth_distance)
+    if phase == "bottom" and region == "middle":
+        phase = "concentric"
+        concentric_start = frame_idx
+        concentric_y_traj = []
+        concentric_depth_traj = []  # ✅ 開始記錄肩腕距離
+    elif phase == "concentric" and region == "top":
+        phase = "top"
+        concentric_end = frame_idx
+        eccentric_time = (eccentric_end - eccentric_start)/fps
+        concentric_time = (concentric_end - concentric_start)/fps
+        push_dips = any(concentric_y_traj[i] > concentric_y_traj[i-1] + 2 for i in range(1, len(concentric_y_traj)))
+        depth_change = max(concentric_depth_traj) - min(concentric_depth_traj)  # ✅ 計算深度變化
+        if eccentric_time >= 0.1 and concentric_time >= 0.1:
+            rep_count += 1
+            bp = BPPoint(y_high=y_high, y_low=y_low, eccentric_time=eccentric_time, concentric_time=concentric_time,
+                         depth_change=depth_change, push_dips=push_dips, rep=rep_count)
+            rep_data_list.append(bp)
+    # 向心階段持續記錄
+    if phase == "concentric":
+        concentric_y_traj.append(WRy)
+        concentric_depth_traj.append(depth_distance)
 
     out.write(frame)
     cv2.imshow("BP Tracker", frame)
