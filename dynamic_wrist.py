@@ -45,8 +45,8 @@ class BPPoint:
                 f"score={self.score}, rep={self.rep})")
 
 # ---- 影片讀取參數 ----
-video_name = "user08.mp4"
-viedo_angle = "youtube//uploaded"
+video_name = "user10.mp4"
+viedo_angle = "youtube"
 video_path = f"D://BenchPress_data//{viedo_angle}//{video_name}"
 cam_angle = "L"
 cap = cv2.VideoCapture(video_path)
@@ -61,6 +61,16 @@ out = cv2.VideoWriter(output_path, fourcc, fps, (frame_width, frame_height))
 
 print(f"影片資訊:fps:{fps}, frame_width:{frame_width} ,frame_height:{frame_height}")
 
+# ---- Mediapipe Pose ----
+pose = mp_pose.Pose(
+    static_image_mode=False,
+    model_complexity=2,
+    smooth_landmarks=True,
+    enable_segmentation=False,
+    min_detection_confidence=0.8,
+    min_tracking_confidence=0.8
+)
+
 # ---- 參數初始化 ----
 frame_idx = 0
 rep_count = 0
@@ -69,8 +79,8 @@ rep_data_list = []
 phase = "top"
 region = "top"
 
-top_range = 30
-bottom_range = 30
+top_range = 20
+bottom_range = 20
 top_threshold = None
 bottom_threshold = None
 first_rep = False
@@ -106,15 +116,6 @@ bottom_pause_time = 0
 y_high = 0
 y_low = 0
 
-# ---- Mediapipe Pose ----
-pose = mp_pose.Pose(
-    static_image_mode=False,
-    model_complexity=2,
-    smooth_landmarks=True,
-    enable_segmentation=False,
-    min_detection_confidence=0.8,
-    min_tracking_confidence=0.8
-)
 
 def draw_line(frame, lmk1, lmk2, color=(200, 200, 200), thickness=3):
     cv2.line(frame, lmk1, lmk2, color, thickness)
@@ -260,10 +261,11 @@ while True:
                 print(f"第{rep_count}次存入:{bp}")
 
             # 每幀記錄 WRy 並標出下陷點（影片中）
-        if phase == "concentric" and WRy > y_low+20:
+        if phase == "concentric" and WRy < y_low:
             concentric_y_traj.append(WRy)
-            if len(concentric_y_traj) > 1 and WRy > concentric_y_traj[-2] + 6:
+            if len(concentric_y_traj) > 1 and WRy > concentric_y_traj[-2]:
                 concentric_dip_frames.append(WRy)
+
                 print("下陷偵測!")
 
              # 在影片中畫出回下陷的點（紅色標記）並加入提示矩形區域
