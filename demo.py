@@ -44,11 +44,12 @@ class BPPoint:
                 f"speed_unstable={self.speed_unstable},"
                 f"score={self.score}, rep={self.rep})")
 
+
 # ---- 影片讀取參數 ----
 video_name = "user10.mp4"
-viedo_angle = "youtube"
-video_path = f"D://BenchPress_data//{viedo_angle}//{video_name}"
+video_path = f"D://BenchPress_data//youtube//{video_name}"
 cam_angle = "L"
+
 cap = cv2.VideoCapture(video_path)
 fps = int(cap.get(cv2.CAP_PROP_FPS))
 frame_width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
