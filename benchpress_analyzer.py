@@ -45,8 +45,8 @@ class BPPoint:
                 f"score={self.score}, rep={self.rep})")
 
 
-def analyze_video(video_name: str, video_path: str, cam_angle: str, top_range=20, bottom_range=20,
-                  untable_threshold=2.5, dips_threshold=20):
+def analyze_video(video_name: str, video_path: str, cam_angle: str, output_path: str, csv_path: str,
+                  top_range=20, bottom_range=20, untable_threshold=2.5, dips_threshold=20):
     # ---- 影片讀取參數 ----
     video_name = video_name
     video_path = f"{video_path}//{video_name}"
@@ -323,3 +323,4 @@ def analyze_video(video_name: str, video_path: str, cam_angle: str, top_range=20
     csv_path = f"D://BenchPress_data//output_data//{video_name}_benchpress_reps.csv"
     df.to_csv(csv_path, index=False, encoding="utf-8-sig")
     print(f"✅ 已輸出到 CSV：{csv_path}")
+    return csv_path, output_path
