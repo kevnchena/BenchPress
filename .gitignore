@@ -3,6 +3,9 @@
 *~
 *.pyc
 *.egg-info
+results/
+temp_videos/
+output/
 build/
 dist/
 docs/_build

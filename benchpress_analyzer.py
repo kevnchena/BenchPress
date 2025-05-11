@@ -1,13 +1,14 @@
+import numpy as np
+import math
+import pandas as pd
+from fontTools.merge.util import first
 import cv2
 import mediapipe as mp
-import pandas as pd
-import math
-import numpy as np
 
-from fontTools.merge.util import first
 
 # 初始化 Pose
 mp_pose = mp.solutions.pose
+
 
 class BPPoint:
     def __init__(self,
@@ -45,24 +46,23 @@ class BPPoint:
                 f"score={self.score}, rep={self.rep})")
 
 
-def analyze_video(video_name: str, video_path: str, cam_angle: str, output_path: str, csv_path: str,
+def analyze_video(video_path: str, cam_angle: str, output_path: str, csv_path: str,
                   top_range=20, bottom_range=20, untable_threshold=2.5, dips_threshold=20):
     # ---- 影片讀取參數 ----
-    video_name = video_name
-    video_path = f"{video_path}//{video_name}"
     cam_angle = cam_angle
-
+    print(f"獲得路徑: {video_path}")
     cap = cv2.VideoCapture(video_path)
     fps = int(cap.get(cv2.CAP_PROP_FPS))
     frame_width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
     frame_height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
     concentric_y_traj = []
 
-    output_path = f"D://BenchPress_data//Mediapipe_Output//{video_name}"
     fourcc = cv2.VideoWriter_fourcc(*"mp4v")
-    out = cv2.VideoWriter(output_path, fourcc, fps, (frame_width, frame_height))
+    out = cv2.VideoWriter(output_path, fourcc, fps,
+                          (frame_width, frame_height))
 
-    print(f"影片資訊:fps:{fps}, frame_width:{frame_width} ,frame_height:{frame_height}")
+    print(
+        f"影片資訊:fps:{fps}, frame_width:{frame_width} ,frame_height:{frame_height}")
 
     # ---- Mediapipe Pose ----
     pose = mp_pose.Pose(
@@ -74,12 +74,12 @@ def analyze_video(video_name: str, video_path: str, cam_angle: str, output_path:
         min_tracking_confidence=0.8
     )
 
-    #高低點門檻值
+    # 高低點門檻值
     top_range = top_range
     bottom_range = bottom_range
-    #不穩定門檻值
+    # 不穩定門檻值
     untable_threshold = untable_threshold
-    #下陷門檻值
+    # 下陷門檻值
     dips_threshold = dips_threshold
 
 # -----參數初始化 do not change-----
@@ -100,8 +100,7 @@ def analyze_video(video_name: str, video_path: str, cam_angle: str, output_path:
     wrist_shoulder_distance_high = 0.0
     wrist_shoulder_distance_low = 0.0
 
-
-    #補償threshold中失去的時間
+    # 補償threshold中失去的時間
     if abs(fps - 30) <= 2:
         THRESHOLD_FRAME_PADDING = 2
     elif abs(fps - 60) <= 2:
@@ -114,24 +113,24 @@ def analyze_video(video_name: str, video_path: str, cam_angle: str, output_path:
     wrist_highest = None
     wrist_lowest = None
 
-    #向心/離心、底部停留計時器
+    # 向心/離心、底部停留計時器
     eccentric_start = 0
     eccentric_end = 0
     concentric_start = 0
     concentric_end = 0
     bottom_pause_time = 0
 
-    #高低點
+    # 高低點
     y_high = 0
     y_low = 0
 
 # ------------------------------------
 
-    #骨架繪製
+    # 骨架繪製
     def draw_line(frame, lmk1, lmk2, color=(200, 200, 200), thickness=3):
         cv2.line(frame, lmk1, lmk2, color, thickness)
 
-    def draw_point(frame, lmk, color=(255,255,255), size=4):
+    def draw_point(frame, lmk, color=(255, 255, 255), size=4):
         cv2.circle(frame, lmk, size, color, -1)
 
     while True:
@@ -170,15 +169,15 @@ def analyze_video(video_name: str, video_path: str, cam_angle: str, output_path:
                 wrist_highest = (WRx, WRy)
                 top_threshold = WRy + top_range
 
-            #初始化最低點，第一下以肩膀高度為準
+            # 初始化最低點，第一下以肩膀高度為準
             if not first_rep and wrist_lowest is None:
                 shoulder_idx = 11 if cam_angle == "L" else 12
                 shoulder_y = int(landmarks[shoulder_idx].y * h)
-                wrist_lowest = (WRx, shoulder_y )  # 你可調整這個數值
+                wrist_lowest = (WRx, shoulder_y)  # 你可調整這個數值
                 bottom_threshold = wrist_lowest[1] - bottom_range
                 print(f"[Init] 使用肩膀高度模擬 wrist_lowest：{wrist_lowest}")
 
-            #elif wrist_lowest is None or WRy > wrist_lowest[1]:
+            # elif wrist_lowest is None or WRy > wrist_lowest[1]:
             #    wrist_lowest = (WRx, WRy)
             #    bottom_threshold = WRy - bottom_range
 
@@ -194,7 +193,7 @@ def analyze_video(video_name: str, video_path: str, cam_angle: str, output_path:
 
             # 區域判定
             region = "middle"
-            if WRy <= top_threshold :
+            if WRy <= top_threshold:
                 region = "top"
             elif WRy >= bottom_threshold:
                 region = "bottom"
@@ -205,11 +204,12 @@ def analyze_video(video_name: str, video_path: str, cam_angle: str, output_path:
                 eccentric_start = frame_idx
                 print("離心開始")
                 y_high = WRy
-                #紀錄肩膀-手腕的距離(high)
+                # 紀錄肩膀-手腕的距離(high)
                 shoulder_idx = 11 if cam_angle == "L" else 12
                 SH = landmarks[shoulder_idx]
                 shoulder_x, shoulder_y = int(SH.x * w), int(SH.y * h)
-                wrist_shoulder_distance_high = ((WRx - shoulder_x) ** 2 + (WRy - shoulder_y) ** 2) ** 0.5
+                wrist_shoulder_distance_high = (
+                    (WRx - shoulder_x) ** 2 + (WRy - shoulder_y) ** 2) ** 0.5
 
             elif phase == "eccentric" and region == "bottom":
                 phase = "bottom"
@@ -222,23 +222,27 @@ def analyze_video(video_name: str, video_path: str, cam_angle: str, output_path:
                 shoulder_idx = 11 if cam_angle == "L" else 12
                 SH = landmarks[shoulder_idx]
                 shoulder_x, shoulder_y = int(SH.x * w), int(SH.y * h)
-                wrist_shoulder_distance_low = ((WRx - shoulder_x) ** 2 + (WRy - shoulder_y) ** 2) ** 0.5
+                wrist_shoulder_distance_low = (
+                    (WRx - shoulder_x) ** 2 + (WRy - shoulder_y) ** 2) ** 0.5
 
             elif phase == "bottom" and region == "middle":
                 phase = "concentric"
                 concentric_start = frame_idx
                 concentric_y_traj = []
                 concentric_dip_frames = []  # 清空下陷紀錄
-                #紀錄底部時間
+                # 紀錄底部時間
                 bottom_exit_frame = frame_idx
-                bottom_pause_time = (bottom_exit_frame - bottom_entry_frame) / fps
+                bottom_pause_time = (bottom_exit_frame -
+                                     bottom_entry_frame) / fps
                 print("向心開始")
 
             elif phase == "concentric" and region == "top":
                 phase = "top"
                 concentric_end = frame_idx
-                eccentric_time = (eccentric_end - eccentric_start)/fps# + threshold_time_padding
-                concentric_time = (concentric_end - concentric_start)/fps #+ threshold_time_padding
+                # + threshold_time_padding
+                eccentric_time = (eccentric_end - eccentric_start)/fps
+                # + threshold_time_padding
+                concentric_time = (concentric_end - concentric_start)/fps
                 print("向心結束")
 
                 # 判斷是否有回下陷（只要出現某一幀 WRy 又變大）
@@ -249,8 +253,9 @@ def analyze_video(video_name: str, video_path: str, cam_angle: str, output_path:
                         concentric_dip_frames.append(WRy)
                         break
 
-                #偵測向心速度穩定性
-                velocities = [concentric_y_traj[i-1] - concentric_y_traj[i] for i in range(1, len(concentric_y_traj))]
+                # 偵測向心速度穩定性
+                velocities = [concentric_y_traj[i-1] - concentric_y_traj[i]
+                              for i in range(1, len(concentric_y_traj))]
                 velocity_std = np.std(velocities)
                 speed_unstable = velocity_std > untable_threshold  # 可依你影片的實際值調整門檻
 
@@ -283,11 +288,14 @@ def analyze_video(video_name: str, video_path: str, cam_angle: str, output_path:
                 for dip_y in concentric_dip_frames:
                     # 紅圈圈表示下陷點
                     cv2.circle(frame, (WRx, int(dip_y)), 6, (0, 0, 255), -1)
-                    cv2.putText(frame, "Dip", (WRx + 10, int(dip_y)), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 255), 2)
+                    cv2.putText(frame, "Dip", (WRx + 10, int(dip_y)),
+                                cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 255), 2)
                     # 顯示下陷區塊區域（紅色長方形）
-                    cv2.rectangle(frame, (WRx - 20, int(dip_y) - 15), (WRx + 20, int(dip_y) + 15), (0, 0, 255), 1)
+                    cv2.rectangle(frame, (WRx - 20, int(dip_y) - 15),
+                                  (WRx + 20, int(dip_y) + 15), (0, 0, 255), 1)
                     # 在畫面上顯示
-            cv2.putText(frame, f"{region} ({phase})", (40,40),cv2.FONT_HERSHEY_SIMPLEX, 1.0, (0,255,255), 2)
+            cv2.putText(frame, f"{region} ({phase})", (40, 40),
+                        cv2.FONT_HERSHEY_SIMPLEX, 1.0, (0, 255, 255), 2)
 
         out.write(frame)
         cv2.imshow("BP with skeleton", frame)
@@ -320,7 +328,6 @@ def analyze_video(video_name: str, video_path: str, cam_angle: str, output_path:
     } for r in rep_data_list]
 
     df = pd.DataFrame(rep_dict_list)
-    csv_path = f"D://BenchPress_data//output_data//{video_name}_benchpress_reps.csv"
     df.to_csv(csv_path, index=False, encoding="utf-8-sig")
     print(f"✅ 已輸出到 CSV：{csv_path}")
     return csv_path, output_path
