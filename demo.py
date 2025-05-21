@@ -4,8 +4,6 @@ import pandas as pd
 import math
 import numpy as np
 
-from fontTools.merge.util import first
-
 # 初始化 Pose
 mp_pose = mp.solutions.pose
 

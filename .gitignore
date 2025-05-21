@@ -3,6 +3,7 @@
 *~
 *.pyc
 *.egg-info
+final.py
 results/
 temp_videos/
 output/
