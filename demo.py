@@ -44,8 +44,8 @@ class BPPoint:
 
 
 # ---- 影片讀取參數 ----
-video_name = "user10.mp4"
-video_path = f"D://BenchPress_data//youtube//{video_name}"
+video_name = "123.mp4"
+video_path = f"D://BenchPress_data//45degree//{video_name}"
 cam_angle = "L"
 
 cap = cv2.VideoCapture(video_path)
