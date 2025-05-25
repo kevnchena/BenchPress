@@ -16,7 +16,16 @@ else:
 model = YOLO('..//best_seg.pt')
 model.to("cuda")
 
-cap = cv2.VideoCapture("D://BenchPress_data//youtube//20250324_165416.mp4")
+cap = cv2.VideoCapture("D://BenchPress_data//youtube//uploaded//user07.mp4")
+
+width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+fps = cap.get(cv2.CAP_PROP_FPS)
+
+# 建立影片輸出物件
+out = cv2.VideoWriter('output_result.mp4',
+                      cv2.VideoWriter_fourcc(*'mp4v'),
+                      fps, (width, height))
 
 while True:
     ret, frame = cap.read()
@@ -61,9 +70,11 @@ while True:
     else:
         combined = frame
 
+    out.write(combined)
     cv2.imshow("YOLOv11 Background Blur", combined)
     if cv2.waitKey(1) & 0xFF == ord('q'):
         break
 
 cap.release()
+out.release()
 cv2.destroyAllWindows()

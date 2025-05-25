@@ -44,7 +44,7 @@ class BPPoint:
 
 
 # ---- 影片讀取參數 ----
-video_name = "123.mp4"
+video_name = "output_result2.mp4"
 video_path = f"D://BenchPress_data//45degree//{video_name}"
 cam_angle = "L"
 
@@ -262,7 +262,7 @@ while True:
             # 每幀記錄 WRy 並標出下陷點（影片中）
         if phase == "concentric" and WRy < y_low:
             concentric_y_traj.append(WRy)
-            if len(concentric_y_traj) > 1 and WRy > concentric_y_traj[-2]:
+            if len(concentric_y_traj) > 1 and WRy > concentric_y_traj[-2]+10:
                 concentric_dip_frames.append(WRy)
 
                 print("下陷偵測!")

@@ -9,9 +9,9 @@ from benchpress_analyzer import analyze_video      # ✅ 你原本的分析主�
 app = FastAPI()
 
 UPLOAD_DIR = "temp_videos"
-RESULT_DIR = "results"
+OUTPUT_DIR = "output"
 os.makedirs(UPLOAD_DIR, exist_ok=True)
-os.makedirs(RESULT_DIR, exist_ok=True)
+os.makedirs(OUTPUT_DIR, exist_ok=True)
 
 
 @app.post("/record")
@@ -28,19 +28,28 @@ def run_full_process(userid, video_path):
 
     # ✅ Step 2: 分析
     csv_path, analyzed_video_path = analyze_video(
-        video_path, "L", f".//output//{userid}.mp4", f".//output//{userid}.csv")
+        video_path, "L", f".//{OUTPUT_DIR}//{userid}_analyzed.mp4",
+                                    f".//{OUTPUT_DIR}//{userid}.csv")
 
     # ✅ Step 3: 可擴充回傳 or 存資料
     print(f"分析完成！CSV: {csv_path}, Video: {analyzed_video_path}")
 
 
-@app.get("/result/video/{userid}")
+@app.get("/results/video/{userid}")
 def get_video(userid: str):
-    path = os.path.join(RESULT_DIR, f"{userid}_analyzed.mp4")
-    return FileResponse(path, media_type="video/mp4")
+    path = os.path.join(OUTPUT_DIR, f"{userid}_analyzed.mp4")
+    if os.path.exists(path):
+        return FileResponse(path, media_type="video/mp4", filename=f"{userid}_result.mp4")
+    else:
+        return {"error": f"找不到{path}檔案"}
 
 
-@app.get("/result/csv/{userid}")
+@app.get("/results/csv/{userid}")
 def get_csv(userid: str):
-    path = os.path.join(RESULT_DIR, f"{userid}_benchpress_reps.csv")
-    return FileResponse(path, media_type="text/csv")
+    path = os.path.join(OUTPUT_DIR, f"{userid}.csv")
+    print(path)
+    if os.path.exists(path):
+        return FileResponse(path, media_type="text/csv")
+    else:
+        return {"error": "找不到csv檔案"}
+
