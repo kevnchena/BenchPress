@@ -1,7 +1,5 @@
 import numpy as np
-import math
 import pandas as pd
-from fontTools.merge.util import first
 import cv2
 import mediapipe as mp
 

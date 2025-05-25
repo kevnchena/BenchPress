@@ -2,39 +2,63 @@ from fastapi import FastAPI, BackgroundTasks
 from fastapi.responses import FileResponse
 import uuid
 import os
+import threading
 
-from webcam import webcam_on  # ✅ 你自己的錄影 function
-from benchpress_analyzer import analyze_video      # ✅ 你原本的分析主程式
+from webcam import webcam_on  # 錄影function
+from benchpress_analyzer import analyze_video      # 原本的分析主程式
 
 app = FastAPI()
 
+#檔案位置
 UPLOAD_DIR = "temp_videos"
 OUTPUT_DIR = "output"
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 
+#錄影全域變數
+recording_threads = {}
+stop_flags = {}
 
+#主要分析
 @app.post("/record")
 def record_and_analyze(background_tasks: BackgroundTasks):
     user_id = str(uuid.uuid4())
+    stop_flags[user_id] = False #停止錄影flags
+    print(user_id)
+
     video_path = os.path.join(UPLOAD_DIR, f"{user_id}.mp4")
-    background_tasks.add_task(run_full_process, user_id, video_path)
+    thread = threading.Thread(target=run_full_process, args=(user_id, video_path))
+    thread.start()
+    #background_tasks.add_task(run_full_process, user_id, video_path)
     return {"message": "錄影與分析任務已啟動", "user_id": user_id}
 
+#停止錄影
+@app.post("/stop/userid")
+def stop_recording(userid: str):
+    if userid in stop_flags:
+        stop_flags[userid] = True #停止錄影flags
+        return {"message": f"已發出停止錄影指令：{userid}"}
+    else:
+        return {"error": "找不到這個使用者 ID 或錄影尚未開始"}
 
+#pipeline
 def run_full_process(userid, video_path):
-    # ✅ Step 1: 錄影
-    video_path = webcam_on(userid)
+    # Step 1: 錄影
+    video_path = webcam_on(userid, stop_flags)
 
-    # ✅ Step 2: 分析
-    csv_path, analyzed_video_path = analyze_video(
-        video_path, "L", f".//{OUTPUT_DIR}//{userid}_analyzed.mp4",
-                                    f".//{OUTPUT_DIR}//{userid}.csv")
+    # Step 2: 分析
+    if os.path.exists(video_path):
+        csv_path, analyzed_video_path = analyze_video(
+            video_path, "L",
+            f".//{OUTPUT_DIR}//{userid}_analyzed.mp4",
+            f".//{OUTPUT_DIR}//{userid}.csv")
 
-    # ✅ Step 3: 可擴充回傳 or 存資料
-    print(f"分析完成！CSV: {csv_path}, Video: {analyzed_video_path}")
+    # Step 3: 可擴充回傳 or 存資料
+        print(f"分析完成！CSV: {csv_path}, Video: {analyzed_video_path}")
+    else:
+        print(f"沒有錄影檔案，跳過分析 {userid}")
 
-
+#下載影片
 @app.get("/results/video/{userid}")
 def get_video(userid: str):
     path = os.path.join(OUTPUT_DIR, f"{userid}_analyzed.mp4")
@@ -43,7 +67,7 @@ def get_video(userid: str):
     else:
         return {"error": f"找不到{path}檔案"}
 
-
+#下載csv
 @app.get("/results/csv/{userid}")
 def get_csv(userid: str):
     path = os.path.join(OUTPUT_DIR, f"{userid}.csv")
