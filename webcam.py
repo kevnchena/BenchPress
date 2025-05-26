@@ -43,7 +43,8 @@ def webcam_on(userid, stop_flags_dict, seconds=60):
         #    break
 
     # 釋放資源
-    #cap.release()
+    cap.release()
     out.release()
     cv2.destroyAllWindows()
+    print("webcam完成錄影")
     return f".//{output_path}"

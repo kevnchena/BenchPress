@@ -49,6 +49,7 @@ def analyze_video(video_path: str, cam_angle: str, output_path: str, csv_path: s
     # ---- 影片讀取參數 ----
     cam_angle = cam_angle
     print(f"獲得路徑: {video_path}")
+    print("開始進行分析")
     cap = cv2.VideoCapture(video_path)
     fps = int(cap.get(cv2.CAP_PROP_FPS))
     frame_width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
@@ -277,7 +278,7 @@ def analyze_video(video_path: str, cam_angle: str, output_path: str, csv_path: s
                 # 每幀記錄 WRy 並標出下陷點（影片中）
             if phase == "concentric" and WRy < y_low:
                 concentric_y_traj.append(WRy)
-                if len(concentric_y_traj) > 1 and WRy > concentric_y_traj[-2]:
+                if len(concentric_y_traj) > 1 and WRy > concentric_y_traj[-2]+ 10:
                     concentric_dip_frames.append(WRy)
 
                     print("下陷偵測!")

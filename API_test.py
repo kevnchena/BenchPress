@@ -4,8 +4,9 @@ import uuid
 import os
 import threading
 
-from webcam import webcam_on  # 錄影function
-from benchpress_analyzer import analyze_video      # 原本的分析主程式
+from webcam import webcam_on  # webcam錄影
+from benchpress_analyzer import analyze_video # 原本的分析主程式
+from yoloSeg import BenchPress_Seg
 
 app = FastAPI()
 
@@ -41,19 +42,23 @@ def stop_recording(userid: str):
     else:
         return {"error": "找不到這個使用者 ID 或錄影尚未開始"}
 
-#pipeline
+#全運行
 def run_full_process(userid, video_path):
     # Step 1: 錄影
     video_path = webcam_on(userid, stop_flags)
 
-    # Step 2: 分析
+    # Step 2: YOLO分割
+    video_path = BenchPress_Seg(userid, video_path)
+    print(video_path)
+
+    # Step 3: 分析動作
     if os.path.exists(video_path):
         csv_path, analyzed_video_path = analyze_video(
             video_path, "L",
             f".//{OUTPUT_DIR}//{userid}_analyzed.mp4",
             f".//{OUTPUT_DIR}//{userid}.csv")
 
-    # Step 3: 可擴充回傳 or 存資料
+    # Step 4: 可擴充回傳 or 存資料
         print(f"分析完成！CSV: {csv_path}, Video: {analyzed_video_path}")
     else:
         print(f"沒有錄影檔案，跳過分析 {userid}")
