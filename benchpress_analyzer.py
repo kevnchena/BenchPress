@@ -44,7 +44,7 @@ class BPPoint:
                 f"score={self.score}, rep={self.rep})")
 
 
-def analyze_video(video_path: str, cam_angle: str, output_path: str, csv_path: str,
+def analyze_video(video_path: str, cam_angle: str, output_path: str, json_path: str,
                   top_range=20, bottom_range=20, untable_threshold=2.5, dips_threshold=20):
     # ---- 影片讀取參數 ----
     cam_angle = cam_angle
@@ -231,8 +231,7 @@ def analyze_video(video_path: str, cam_angle: str, output_path: str, csv_path: s
                 concentric_dip_frames = []  # 清空下陷紀錄
                 # 紀錄底部時間
                 bottom_exit_frame = frame_idx
-                bottom_pause_time = (bottom_exit_frame -
-                                     bottom_entry_frame) / fps
+                bottom_pause_time = (bottom_exit_frame - bottom_entry_frame) / fps
                 print("向心開始")
 
             elif phase == "concentric" and region == "top":
@@ -311,7 +310,7 @@ def analyze_video(video_path: str, cam_angle: str, output_path: str, csv_path: s
     for rep_obj in rep_data_list:
         print(rep_obj)
 
-    # ✅ 匯出 CSV 給 Excel 分析
+    # 匯出 json
     rep_dict_list = [{
         "rep": r.rep,
         "y_high": r.y_high,
@@ -327,6 +326,6 @@ def analyze_video(video_path: str, cam_angle: str, output_path: str, csv_path: s
     } for r in rep_data_list]
 
     df = pd.DataFrame(rep_dict_list)
-    df.to_csv(csv_path, index=False, encoding="utf-8-sig")
-    print(f"✅ 已輸出到 CSV：{csv_path}")
-    return csv_path, output_path
+    df.to_json(json_path,force_ascii=False, indent=2, encoding="utf-8-sig")
+    print(f"✅ 已輸出到 json：{json_path}")
+    return json_path, output_path
