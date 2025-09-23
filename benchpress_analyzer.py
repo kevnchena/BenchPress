@@ -326,6 +326,6 @@ def analyze_video(video_path: str, cam_angle: str, output_path: str, json_path: 
     } for r in rep_data_list]
 
     df = pd.DataFrame(rep_dict_list)
-    df.to_json(json_path,force_ascii=False, indent=2, encoding="utf-8-sig")
+    df.to_json(json_path,force_ascii=False, indent=2, orient="records")
     print(f"✅ 已輸出到 json：{json_path}")
     return json_path, output_path

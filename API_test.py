@@ -1,4 +1,4 @@
-from fastapi import FastAPI, BackgroundTasks
+from fastapi import FastAPI, BackgroundTasks,Query
 from fastapi.responses import FileResponse
 from fastapi.middleware.cors import CORSMiddleware #前端讀取
 import uuid
@@ -36,32 +36,33 @@ recording_threads = {}
 stop_flags = {}
 
 #sql使用
-class User(BaseModel):
+class Route(BaseModel):
     userid: str
-    email: str
 
 
 #主要分析
 @app.post("/record")
-def record_and_analyze(user:User,background_tasks: BackgroundTasks):
-    user_id = user.userid
-    stop_flags[user_id] = False #停止錄影flags
-    print(user_id)
+def record_and_analyze(user:Route,background_tasks: BackgroundTasks):
+    userid = user.userid
+    stop_flags[userid] = False #停止錄影flags
+    print(userid)
 
-    video_path = os.path.join(UPLOAD_DIR, f"{user_id}.mp4")
-    thread = threading.Thread(target=run_full_process, args=(user_id, video_path))
+    video_path = os.path.join(UPLOAD_DIR, f"{userid}.mp4")
+    thread = threading.Thread(target=run_full_process, args=(userid, video_path))
     thread.start()
     #background_tasks.add_task(run_full_process, user_id, video_path)
-    return {"message": "錄影啟動", "user_id": user_id}
+    return {"message": "錄影啟動", "user_id": userid}
 
 #停止錄影
-@app.post("/stop/{userid}")
-def stop_recording(userid: str):
+@app.post("/stop")
+def stop_recording(user:Route):
+    userid = user.userid
+    json_path = os.path.join(OUTPUT_DIR, f"{userid}.json")
     if userid in stop_flags:
         stop_flags[userid] = True #停止錄影flags
-        return {"message": f"已發出停止錄影指令：{userid}"}
+        return FileResponse(json_path, media_type="application/json")
     else:
-        return {"error": "找不到這個使用者 ID 或錄影尚未開始"}
+        return {"error": "<UNK>"}
 
 #全運行
 def run_full_process(userid, video_path):
@@ -81,24 +82,22 @@ def run_full_process(userid, video_path):
 
     # Step 4: 可擴充回傳 or 存資料
         print(f"分析完成！json: {json_path}, Video: {analyzed_video_path}")
-        return FileResponse(json_path, media_type="application/json")
     else:
         print(f"沒有錄影檔案，跳過分析 {userid}")
-        return {"error": "<UNK>"}
 
 #下載影片
-@app.get("/results/video/{userid}")
-def get_video(userid: str):
-    path = os.path.join(OUTPUT_DIR, f"{userid}_analyzed.mp4")
+@app.get("/results/video")
+def get_video(uid: str = Query(..., description="Firebase UID")):
+    path = os.path.join(OUTPUT_DIR, f"{uid}_analyzed.mp4")
     if os.path.exists(path):
-        return FileResponse(path, media_type="video/mp4", filename=f"{userid}_result.mp4")
+        return FileResponse(path, media_type="video/mp4", filename=f"{uid}_result.mp4")
     else:
         return {"error": f"找不到{path}檔案"}
 
 #下載json
-@app.get("/results/json/{userid}")
-def get_csv(userid: str):
-    path = os.path.join(OUTPUT_DIR, f"{userid}.json")
+@app.get("/results/json")
+def get_csv(uid: str = Query(..., description="Firebase UID")):
+    path = os.path.join(OUTPUT_DIR, f"{uid}.json")
     print(path)
     if os.path.exists(path):
         return FileResponse(path, media_type="application/json")
@@ -106,6 +105,12 @@ def get_csv(userid: str):
         return {"error": "找不到json檔案"}
 
 #------SQL------
+
+#sql使用
+class User(BaseModel):
+    userid: str
+    email: str
+
 
 #插入使用者uid、email
 @app.post("/sql")
