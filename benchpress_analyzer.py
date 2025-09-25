@@ -10,6 +10,7 @@ mp_pose = mp.solutions.pose
 
 class BPPoint:
     def __init__(self,
+                 weight=0.0,
                  y_high=0,
                  y_low=0,
                  depth_high=0.0,
@@ -21,6 +22,7 @@ class BPPoint:
                  push_dips=False,
                  score=0.0,
                  rep=0):
+        self.weight = weight
         self.y_high = y_high
         self.y_low = y_low
         self.depth_high = depth_high
@@ -45,7 +47,7 @@ class BPPoint:
 
 
 def analyze_video(video_path: str, cam_angle: str, output_path: str, json_path: str,
-                  top_range=20, bottom_range=20, untable_threshold=2.5, dips_threshold=20):
+                  top_range=20, bottom_range=20, untable_threshold=2.5, dips_threshold=20,weight=0.0):
     # ---- 影片讀取參數 ----
     cam_angle = cam_angle
     print(f"獲得路徑: {video_path}")
@@ -54,7 +56,9 @@ def analyze_video(video_path: str, cam_angle: str, output_path: str, json_path: 
     fps = int(cap.get(cv2.CAP_PROP_FPS))
     frame_width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
     frame_height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+    user_weight = weight
     concentric_y_traj = []
+
 
     fourcc = cv2.VideoWriter_fourcc(*"mp4v")
     out = cv2.VideoWriter(output_path, fourcc, fps,
@@ -313,6 +317,7 @@ def analyze_video(video_path: str, cam_angle: str, output_path: str, json_path: 
     # 匯出 json
     rep_dict_list = [{
         "rep": r.rep,
+        "weight": user_weight,
         "y_high": r.y_high,
         "y_low": r.y_low,
         "depth_high": round(r.depth_high, 2),
@@ -326,6 +331,6 @@ def analyze_video(video_path: str, cam_angle: str, output_path: str, json_path: 
     } for r in rep_data_list]
 
     df = pd.DataFrame(rep_dict_list)
-    df.to_json(json_path,force_ascii=False, indent=2, orient="records" )
+    df.to_json(json_path,force_ascii=False, indent=2, orient="records")
     print(f"✅ 已輸出到 json：{json_path}")
     return json_path, output_path
