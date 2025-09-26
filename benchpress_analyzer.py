@@ -20,6 +20,7 @@ class BPPoint:
                  bottom_pause_time=0.0,
                  speed_unstable=False,
                  push_dips=False,
+                 power=0.0,
                  score=0.0,
                  rep=0):
         self.weight = weight
@@ -32,6 +33,7 @@ class BPPoint:
         self.bottom_pause_time = bottom_pause_time
         self.speed_unstable = speed_unstable
         self.push_dips = push_dips
+        self.power = power
         self.score = score
         self.rep = rep
 
@@ -56,8 +58,12 @@ def analyze_video(video_path: str, cam_angle: str, output_path: str, json_path: 
     fps = int(cap.get(cv2.CAP_PROP_FPS))
     frame_width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
     frame_height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+    # ---- 計算用參數 ----
     user_weight = weight
     concentric_y_traj = []
+    G = 9.81  # m/s^2
+    PX_TO_M = 0.0025  # 1 px ≈ 2.5 mm 預設值
+    MIN_CON_TIME = 1e-3  # 避免除以 0
 
 
     fourcc = cv2.VideoWriter_fourcc(*"mp4v")
@@ -261,9 +267,23 @@ def analyze_video(video_path: str, cam_angle: str, output_path: str, json_path: 
                 velocity_std = np.std(velocities)
                 speed_unstable = velocity_std > untable_threshold  # 可依你影片的實際值調整門檻
 
+                #計算功率
+                # 像素位移（往下值變大，取絕對值）
+                bar_travel_px = abs(y_low - y_high)
+                # 轉公尺（若未偵測到，給 0）
+                bar_travel_m = bar_travel_px * PX_TO_M
+                # 取有效的向心時間
+                t_con = max(concentric_time, MIN_CON_TIME)
+                # 使用後端的重量（kg）
+                m = float(user_weight) if user_weight else 0.0
+                # 功率：如果重量或位移為 0，就給 0
+                user_power = (m * G * bar_travel_m) / t_con if (m > 0 and bar_travel_m > 0) else 0.0
+                print(f"bar_travel: {bar_travel_px},bar_travel_m:{bar_travel_m},t_con:{t_con},m:{m},user_power: {user_power}")
+
                 if eccentric_time >= 0.1 and concentric_time >= 0.1:
                     rep_count += 1
                     bp = BPPoint(
+                        weight=user_weight,
                         y_high=y_high,
                         y_low=y_low,
                         depth_high=wrist_shoulder_distance_high,
@@ -273,6 +293,7 @@ def analyze_video(video_path: str, cam_angle: str, output_path: str, json_path: 
                         bottom_pause_time=bottom_pause_time,
                         speed_unstable=speed_unstable,
                         push_dips=push_dips,
+                        power=user_power,
                         rep=rep_count
                     )
                     rep_data_list.append(bp)
@@ -317,7 +338,7 @@ def analyze_video(video_path: str, cam_angle: str, output_path: str, json_path: 
     # 匯出 json
     rep_dict_list = [{
         "rep": r.rep,
-        "weight": user_weight,
+        "weight": r.weight,
         "y_high": r.y_high,
         "y_low": r.y_low,
         "depth_high": round(r.depth_high, 2),
@@ -326,6 +347,7 @@ def analyze_video(video_path: str, cam_angle: str, output_path: str, json_path: 
         "concentric_time": round(r.concentric_time, 3),
         "bottom_pause_time": round(r.bottom_pause_time, 3),
         "speed_unstable": r.speed_unstable,
+        "power":r.power,
         "push_dips": r.push_dips,
         "score": r.score
     } for r in rep_data_list]

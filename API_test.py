@@ -49,11 +49,13 @@ class Route(BaseModel):
 @app.post("/record")
 def record_and_analyze(user:Route,background_tasks: BackgroundTasks):
     userid = user.userid
+    weight = float(user.weight or 0)
     stop_flags[userid] = False #停止錄影flags
     print(userid)
+    print(user.weight)
 
     video_path = os.path.join(UPLOAD_DIR, f"{userid}.mp4")
-    thread = threading.Thread(target=run_full_process, args=(userid, user.weight , video_path, done))
+    thread = threading.Thread(target=run_full_process, args=(userid, weight , video_path, done))
     thread.start()
     #background_tasks.add_task(run_full_process, user_id, video_path)
     return {"message": "錄影啟動", "user_id": userid}
@@ -63,13 +65,15 @@ def record_and_analyze(user:Route,background_tasks: BackgroundTasks):
 def stop_recording(user:Route):
     userid = user.userid
     weight = float(user.weight or 0)
+    print(weight)
+
     json_path = os.path.join(OUTPUT_DIR, f"{userid}.json")
 
     if userid in stop_flags:
         stop_flags[userid] = True #停止錄影flags
         done.wait()
         print("分析完成，送出json")
-        time.sleep(1)  #檔案建立煞車
+        time.sleep(2)  #檔案建立煞車
         return FileResponse(json_path, media_type="application/json")
     else:
         done.wait()
@@ -77,21 +81,21 @@ def stop_recording(user:Route):
         return {"error": "<UNK>"}
 
 #全運行
-def run_full_process(userid, weight,video_path, done_evt: threading.Event):
+def run_full_process(userid, weight, video_path, done_evt: threading.Event):
     # Step 1: 錄影
     video_path = webcam_on(userid, stop_flags)
 
     # Step 2: YOLO分割
     video_path = BenchPress_Seg(userid, video_path)
-    print(video_path)
 
     # Step 3: 分析動作
     if os.path.exists(video_path):
         json_path, analyzed_video_path = analyze_video(
-
             video_path, "L",
             f".//{OUTPUT_DIR}//{userid}_analyzed.mp4",
-            f".//{OUTPUT_DIR}//{userid}.json")
+            f".//{OUTPUT_DIR}//{userid}.json",
+            weight=weight
+        )
 
     # Step 4: 可擴充回傳 or 存資料
         done_evt.set()
