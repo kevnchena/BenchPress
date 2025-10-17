@@ -13,7 +13,7 @@ else:
 
 
 # 載入 YOLOv11 模型
-model = YOLO('..//best_seg.pt')
+model = YOLO('../best_seg.pt')
 model.to("cuda")
 
 cap = cv2.VideoCapture("D://BenchPress_data//youtube//uploaded//user07.mp4")

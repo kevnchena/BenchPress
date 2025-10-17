@@ -6,7 +6,7 @@ import os
 
 
 # 載入 YOLOv11 模型
-model = YOLO('..//best_seg.pt')
+model = YOLO('../best_seg.pt')
 
 print("CUDA 是否可用:", torch.cuda.is_available())
 

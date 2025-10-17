@@ -58,20 +58,16 @@ def analyze_video(video_path: str, cam_angle: str, output_path: str, json_path: 
     fps = int(cap.get(cv2.CAP_PROP_FPS))
     frame_width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
     frame_height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-    # ---- 計算用參數 ----
-    user_weight = weight
-    concentric_y_traj = []
-    G = 9.81  # m/s^2
-    PX_TO_M = 0.0025  # 1 px ≈ 2.5 mm 預設值
-    MIN_CON_TIME = 1e-3  # 避免除以 0
-
-
     fourcc = cv2.VideoWriter_fourcc(*"mp4v")
     out = cv2.VideoWriter(output_path, fourcc, fps,
                           (frame_width, frame_height))
+    print(f"影片資訊:fps:{fps}, frame_width:{frame_width} ,frame_height:{frame_height}")
 
-    print(
-        f"影片資訊:fps:{fps}, frame_width:{frame_width} ,frame_height:{frame_height}")
+    # ---- 計算用參數 ----
+    user_weight = weight
+    G = 9.81  # m/s^2
+    PX_TO_M = 0.0025  # 1 px ≈ 2.5 mm 預設值
+    MIN_CON_TIME = 1e-3  # 避免除以 0
 
     # ---- Mediapipe Pose ----
     pose = mp_pose.Pose(

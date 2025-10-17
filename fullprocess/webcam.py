@@ -19,7 +19,7 @@ def webcam_on(userid, stop_flags_dict, seconds=60):
 
     fourcc = cv2.VideoWriter_fourcc(*'mp4v')  # 視訊編碼格式
     # 檔名, 格式, FPS, 畫面尺寸
-    output_path = os.path.join('results', f'{userid}.mp4')
+    output_path = os.path.join('../results', f'{userid}.mp4')
     out = cv2.VideoWriter(output_path, fourcc, 30, (width, height))
 
     start_time = time.time()
@@ -36,7 +36,7 @@ def webcam_on(userid, stop_flags_dict, seconds=60):
         out.write(frame)
 
         # 顯示畫面
-        #cv2.imshow('Webcam', frame)
+        cv2.imshow('Webcam', frame)
 
         # 按下 q 鍵離開
         #if cv2.waitKey(1) & 0xFF == ord('q'):
