@@ -6,6 +6,7 @@ from fastapi.middleware.cors import CORSMiddleware #前端讀取
 from gpt_api.ai_routes import router as ai_router
 
 import os
+from datetime import datetime
 import json
 import threading
 from pydantic import BaseModel
@@ -42,13 +43,13 @@ os.makedirs(OUTPUT_DIR, exist_ok=True)
 stop_flags = {}
 done = threading.Event()
 
-#sql使用
+# 主頁面使用
 class Route(BaseModel):
     userid: str
     weight: Optional[float] = 0
 
 
-#主要分析
+# 主要分析
 @app.post("/record")
 def record_and_analyze(user:Route):
     userid = user.userid
@@ -62,7 +63,7 @@ def record_and_analyze(user:Route):
     thread.start()
     return {"message": "錄影啟動", "user_id": userid}
 
-#停止錄影
+# 停止錄影
 @app.post("/stop")
 def stop_recording(user:Route):
     userid = user.userid
@@ -70,6 +71,7 @@ def stop_recording(user:Route):
     print(weight)
 
     json_path = os.path.join(OUTPUT_DIR, f"{userid}.json")
+    return FileResponse(json_path, media_type="application/json")
     if userid in stop_flags:
         stop_flags[userid] = True #停止錄影flags
         done.wait()
@@ -81,7 +83,7 @@ def stop_recording(user:Route):
         print("分析失敗")
         return {"error": "<UNK>"}
 
-#全運行
+# 全運行
 def run_full_process(userid, weight, video_path, done_evt: threading.Event):
     # Step 1: 錄影
     video_path = webcam_on(userid, stop_flags)
@@ -105,7 +107,7 @@ def run_full_process(userid, weight, video_path, done_evt: threading.Event):
         done_evt.set()
         print(f"沒有錄影檔案，跳過分析 {userid}")
 
-#下載影片
+# 下載影片
 @app.get("/results/video")
 def get_video(uid: str = Query(..., description="Firebase UID")):
     path = os.path.join(OUTPUT_DIR, f"{uid}_analyzed.mp4")
@@ -114,7 +116,7 @@ def get_video(uid: str = Query(..., description="Firebase UID")):
     else:
         return {"error": f"找不到{path}檔案"}
 
-#下載json
+# 下載json
 @app.get("/results/json")
 def get_json(uid: str = Query(..., description="Firebase UID")):
     path = os.path.join(OUTPUT_DIR, f"{uid}.json")
@@ -123,22 +125,55 @@ def get_json(uid: str = Query(..., description="Firebase UID")):
         return FileResponse(path, media_type="application/json")
     else:
         return {"error": "找不到json檔案"}
-#GPT API使用
+
+# history頁面session載入
+@app.get("/sql/sessions")
+def get_sessions(uid: str):
+    con = mysql.connector.connect(
+        user="root",
+        password="6256875",
+        host="localhost",
+        database="mydb"
+    )
+    cur = con.cursor(dictionary=True)
+
+    cur.execute("""
+        SELECT id, uid, started_at, notes
+        FROM sessions
+        WHERE uid = %s
+        ORDER BY started_at DESC
+    """, (uid,))
+    sessions = cur.fetchall()
+    con.close()
+    return {"sessions": sessions}
+
+# 查詢rep
+@app.get("/sql/session/{session_id}/reps")
+def get_reps(session_id: int):
+    con = mysql.connector.connect(
+        user="root",
+        password="6256875",
+        host="localhost",
+        database="mydb"
+    )
+    cur = con.cursor(dictionary=True)
+
+    cur.execute("""
+        SELECT *
+        FROM benchpress_reps
+        WHERE session_id = %s
+        ORDER BY rep_no ASC
+    """, (session_id,))
+    reps = cur.fetchall()
+    con.close()
+    return {"reps": reps}
 
 #------SQL------
 
-#sql使用
+# ------ sign_up ------
 class User(BaseModel): #users database
     userid: str
     email: str
-
-class SessionCreateReq(BaseModel): #session database
-    uid: str
-    notes: Optional[str] = None
-
-class RepsIngestReq(BaseModel): #benchpress_rep database
-    uid: str
-    session_id: int  # 剛剛建立的 session_id
 
 #插入users table
 @app.post("/sql")
@@ -156,124 +191,81 @@ def signup_to_sql(user: User):
     print(f"user.id: {user.userid},user.email: {user.email}")
     return {"status": "ok", "uid": user.userid, "email": user.email}
 
-#插入Session table
-@app.post("/sql/sessions")
-def create_session(payload: SessionCreateReq):
-    con = mysql.connector.connect(
-        user="root",
-        password="6256875",
-        host="localhost",
-        database="mydb"   # <-- 這裡用你的實際 DB
-    )
-    try:
-        cur = con.cursor()
+# ----- session table -----
 
-        # FK 防呆：確認 uid 存在 users
-        cur.execute("SELECT 1 FROM users WHERE uid=%s", (payload.uid,))
-        if cur.fetchone() is None:
-            raise HTTPException(status_code=404, detail="uid not found in users")
+class SessionCreate(BaseModel):
+    uid: str
+    notes: str | None = None
+    avg_power: float | None = None
+    avg_score: float | None = None
+    total_reps: int | None = None
 
-        # 建立 session（started_at 若有 default CURRENT_TIMESTAMP 可不傳）
-        cur.execute(
-            "INSERT INTO sessions (uid, started_at, notes) VALUES (%s, NOW(), %s)",
-            (payload.uid, payload.notes)
-        )
-        session_id = cur.lastrowid
-        con.commit()
-        return {"status": "ok", "session_id": session_id}
-    except mysql.connector.Error as e:
-        con.rollback()
-        raise HTTPException(status_code=500, detail=f"MySQL error: {e.msg}")
-    finally:
-        try:
-            cur.close()
-        except:
-            pass
-        con.close()
-
-#插入bench_press table
-@app.post("/sql/reps/ingest")
-def ingest_reps(payload: RepsIngestReq):
-    # 從後端的 JSON 取資料
-    reps = load_latest_reps_json(payload.uid)
-    if not reps:
-        raise HTTPException(status_code=404, detail="no analyzed reps found for this uid")
-
+@app.post("/sql/session/create")
+def create_session(data: SessionCreate):
     con = mysql.connector.connect(
         user="root",
         password="6256875",
         host="localhost",
         database="mydb"
     )
-    try:
-        cur = con.cursor()
+    cur = con.cursor()
 
-        # 檢查 session 是否存在且屬於該 uid
-        cur.execute("SELECT uid FROM sessions WHERE id=%s", (payload.session_id,))
-        row = cur.fetchone()
-        if row is None:
-            raise HTTPException(status_code=404, detail="session not found")
-        if row[0] != payload.uid:
-            raise HTTPException(status_code=403, detail="session uid mismatch")
+    cur.execute("""
+        INSERT INTO sessions (uid, started_at, notes)
+        VALUES (%s, %s, %s)
+    """, (data.uid, datetime.now(), data.notes or ""))
+    con.commit()
 
-        sql = """
+    session_id = cur.lastrowid
+    con.close()
+
+    return {"status": "ok", "session_id": session_id}
+
+# ----- bench_press table -----
+
+class RepInsert(BaseModel):
+    uid: str
+    session_id: int
+    reps: list
+
+@app.post("/sql/reps/add")
+def insert_reps(data: RepInsert):
+    con = mysql.connector.connect(
+        user="root",
+        password="6256875",
+        host="localhost",
+        database="mydb"
+    )
+    cur = con.cursor()
+
+    for r in data.reps:
+        cur.execute("""
             INSERT INTO benchpress_reps (
-              uid, session_id,
-              rep_no, weight, y_high, y_low, depth_high, depth_low,
+              uid, session_id, rep_no, weight,
+              y_high, y_low, depth_high, depth_low,
               eccentric_time, concentric_time, bottom_pause_time,
               speed_unstable, push_dips, power, score
-            )
-            VALUES (
-              %s, %s,
-              %s, %s, %s, %s, %s, %s,
-              %s, %s, %s,
-              %s, %s, %s, %s
-            )
-        """
+            ) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+        """, (
+            data.uid,
+            data.session_id,
+            r.get("rep"),
+            r.get("weight"),
+            r.get("y_high"),
+            r.get("y_low"),
+            r.get("depth_high"),
+            r.get("depth_low"),
+            r.get("eccentric_time"),
+            r.get("concentric_time"),
+            r.get("bottom_pause_time"),
+            int(r.get("speed_unstable", False)),
+            int(r.get("push_dips", False)),
+            r.get("power"),
+            r.get("score")
+        ))
 
-        batch = []
-        for r in reps:
-            batch.append((
-                payload.uid,
-                payload.session_id,
-                int(r.get("rep") or r.get("rep_no") or 0),
-                float(r.get("weight") or 0),
-                int(r.get("y_high") or 0),
-                int(r.get("y_low") or 0),
-                float(r.get("depth_high") or 0),
-                float(r.get("depth_low") or 0),
-                float(r.get("eccentric_time") or 0),
-                float(r.get("concentric_time") or 0),
-                float(r.get("bottom_pause_time") or 0),
-                int(bool(r.get("speed_unstable"))),
-                int(bool(r.get("push_dips"))),
-                float(r.get("power") or 0),
-                float(r.get("score") or 0),
-            ))
+    con.commit()
+    con.close()
 
-        if not batch:
-            return {"status": "ok", "inserted": 0}
-
-        cur.executemany(sql, batch)
-        con.commit()
-        return {"status": "ok", "inserted": cur.rowcount}
-    except mysql.connector.Error as e:
-        con.rollback()
-        raise HTTPException(status_code=500, detail=f"MySQL error: {e.msg}")
-    finally:
-        try:
-            cur.close()
-        except:
-            pass
-        con.close()
-
-
-def load_latest_reps_json(uid: str) -> List[Dict]:
-
-    path = os.path.join(OUTPUT_DIR, f"{uid}.json")
-    if not os.path.exists(path):
-        return []
-    with open(path, "r", encoding="utf-8") as f:
-        data = json.load(f)
-    return data if isinstance(data, list) else []
+    return {"status": "ok", "inserted": len(data.reps)}
 

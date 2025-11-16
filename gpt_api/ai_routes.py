@@ -1,42 +1,81 @@
 from fastapi import APIRouter
 from pydantic import BaseModel
 from openai import OpenAI
+import json
 
 client = OpenAI()
-
 router = APIRouter()
+
 
 class AnalyzeRequest(BaseModel):
     reps: list  # 前端送來的 rep JSON
-    avg: dict   # 也可以送 avgPower, avgEccentric 等 summary
+    avg: dict   # 可選的 summary 資料
+
 
 @router.post("/gpt/analyze")
-def gpt_analyze(data: AnalyzeRequest):
-    prompt = f"""
-    這是一組臥推動作數據，請逐一下 rep 做簡短分析，
-    並在最後提供總體評估與建議。請用簡潔專業的教練語氣輸出。
-
-    數據 JSON:
-    {data.dict()}
+async def gpt_analyze(data: AnalyzeRequest):
+    """
+    使用 GPT-5-mini 分析 bench press：
+    - 每個 rep 都要有分數與評論
+    - 最後要有總結與建議
+    - 輸出為乾淨 JSON 格式
     """
 
-    resp = client.responses.create(
-        model="gpt-4o-mini",
-        temperature=0.2,
-        input=[
-            {
-                "role": "system",
-                "content": "你是一位專業健身教練，會針對 bench press 數據做分析，主要給予力量和組間休息的建議。請把這組訓練的每一下做出分析並且給整組一個評語。push_dips表示該組的向心是否有下沉。"
+    prompt = f"""
+You are a professional strength and conditioning coach.
+Analyze the following bench press data (each rep includes timing, power, and stability metrics).
 
-            },
+For each rep:
+- Provide a short evaluation in Traditional Chinese.
+- Give a numeric score from 1 to 10 (higher = better execution).
 
+At the end, provide:
+- An overall summary in Traditional Chinese (covering tempo, stability, fatigue).
+- A training recommendation (e.g., rest duration or load adjustment).
 
-            {
-                "role": "user",
-                "content": prompt
-            }
-        ]
-    )
+Required JSON format (must be valid JSON, no explanation text):
+{{
+  "reps_analysis": [
+    {{"rep": 1, "score": 8.5, "comment": "動作穩定且速度理想。"}},
+    {{"rep": 2, "score": 7.0, "comment": "離心略快，需加強控制。"}}
+  ],
+  "overall_summary": "整體節奏良好，後段出現疲勞跡象。",
+  "training_advice": "建議組間休息 3～4 分鐘。"
+}}
 
-    # 把 GPT 輸出的文字回傳
-    return {"summary": resp.output[0].content[0].text}
+Analyze this data:
+{json.dumps(data.dict(), ensure_ascii=False)}
+"""
+
+    try:
+        resp = client.chat.completions.create(
+            model="gpt-5-mini",
+            #temperature=0.3,
+            messages=[
+                {
+                    "role": "system",
+                    "content": (
+                        "You are an expert fitness coach. "
+                        "Always respond in valid JSON only, no other text, comments, or formatting."
+                        "All comments must be written in Traditional Chinese."
+                    ),
+                },
+                {"role": "user", "content": prompt},
+            ],
+        )
+
+        raw_output = resp.choices[0].message.content.strip()
+        cleaned = raw_output.replace("\n", "").replace("\r", "").strip()
+
+        # 嘗試解析 JSON
+        try:
+            parsed = json.loads(cleaned)
+        except json.JSONDecodeError:
+            parsed = {"error": "Invalid JSON output", "raw": cleaned}
+        print(resp.choices[0].message.content.strip())
+        return {"summary": parsed}
+
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return {"error": f"GPT分析失敗: {str(e)}"}
