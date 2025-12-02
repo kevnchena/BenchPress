@@ -1,4 +1,5 @@
 import time
+from moviepy import VideoFileClip
 
 from fastapi import FastAPI, Query, HTTPException
 from fastapi.responses import FileResponse
@@ -8,6 +9,7 @@ from gpt_api.ai_routes import router as ai_router
 import os
 from datetime import datetime
 import json
+import uuid
 import threading
 from pydantic import BaseModel
 from typing import Optional, List, Dict
@@ -71,12 +73,12 @@ def stop_recording(user:Route):
     print(weight)
 
     json_path = os.path.join(OUTPUT_DIR, f"{userid}.json")
-    return FileResponse(json_path, media_type="application/json")
+    #return FileResponse(json_path, media_type="application/json")
     if userid in stop_flags:
         stop_flags[userid] = True #停止錄影flags
         done.wait()
         print("分析完成，送出json")
-        time.sleep(2)  #檔案建立煞車
+        time.sleep(2)  #等待檔案建立安全時間
         return FileResponse(json_path, media_type="application/json")
     else:
         done.wait()
@@ -126,6 +128,32 @@ def get_json(uid: str = Query(..., description="Firebase UID")):
     else:
         return {"error": "找不到json檔案"}
 
+# 獲得異常.json
+@app.get("/results/meta")
+def get_meta(uid: str = Query(..., description="Firebase UID")):
+    meta_path = os.path.join(OUTPUT_DIR, f"{uid}_meta.json")
+    if os.path.exists(meta_path):
+        return FileResponse(meta_path, media_type="application/json")
+    else:
+        return {"abnormal_segments": []}
+
+# 異常影片片段
+@app.get("/video/clip")
+def get_video_clip(uid: str, start: float, end: float):
+    """回傳影片指定時間區段 (mp4)"""
+    try:
+        video_path = os.path.join(OUTPUT_DIR, f"{uid}_analyzed.mp4")
+        if not os.path.exists(video_path):
+            return {"error": f"Video for {uid} not found"}
+
+        # 剪輯暫存檔
+        out_path = os.path.join(OUTPUT_DIR, f"clip_{uid}_{uuid.uuid4().hex[:6]}.mp4")
+        clip = VideoFileClip(video_path).subclip(start, end)
+        clip.write_videofile(out_path, codec="libx264", audio=False, verbose=False, logger=None)
+        return FileResponse(out_path, media_type="video/mp4", filename=os.path.basename(out_path))
+    except Exception as e:
+        return {"error": str(e)}
+
 # history頁面session載入
 @app.get("/sql/sessions")
 def get_sessions(uid: str):
@@ -168,7 +196,7 @@ def get_reps(session_id: int):
     con.close()
     return {"reps": reps}
 
-#------SQL------
+#=================SQL====================
 
 # ------ sign_up ------
 class User(BaseModel): #users database

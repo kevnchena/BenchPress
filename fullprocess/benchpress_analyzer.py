@@ -2,6 +2,7 @@ import numpy as np
 import pandas as pd
 import cv2
 import mediapipe as mp
+import json
 
 
 # 初始化 Pose
@@ -9,20 +10,9 @@ mp_pose = mp.solutions.pose
 
 
 class BPPoint:
-    def __init__(self,
-                 weight=0.0,
-                 y_high=0,
-                 y_low=0,
-                 depth_high=0.0,
-                 depth_low=0.0,
-                 eccentric_time=0.0,
-                 concentric_time=0.0,
-                 bottom_pause_time=0.0,
-                 speed_unstable=False,
-                 push_dips=False,
-                 power=0.0,
-                 score=0.0,
-                 rep=0):
+    def __init__(self, weight=0.0, y_high=0, y_low=0, depth_high=0.0, depth_low=0.0, eccentric_time=0.0,
+                 concentric_time=0.0, bottom_pause_time=0.0, speed_unstable=False, push_dips=False, power=0.0,
+                 score=0.0, rep=0, start_time=0.0, end_time=0.0):
         self.weight = weight
         self.y_high = y_high
         self.y_low = y_low
@@ -36,20 +26,25 @@ class BPPoint:
         self.power = power
         self.score = score
         self.rep = rep
+        self.start_time = start_time
+        self.end_time = end_time
 
     def __repr__(self):
         return (f"BPPoint(y_high={self.y_high}, y_low={self.y_low}, "
-                f" depth_high={self.depth_high:.2f}, depth_low={self.depth_low:.2f}, "
+                f"depth_high={self.depth_high:.2f}, depth_low={self.depth_low:.2f},"
                 f"eccentric_time={self.eccentric_time:.2f}, "
                 f"concentric_time={self.concentric_time:.2f}, "
                 f"bottom_pause_time={self.bottom_pause_time:.2f}, "
                 f"push_dips={self.push_dips}, "
                 f"speed_unstable={self.speed_unstable},"
-                f"score={self.score}, rep={self.rep})")
+                f"score={self.score}, "
+                f"rep={self.rep}),"
+                f"start_time={self.start_time:.2f}, "
+                f"end_time={self.end_time:.2f})")
 
 
 def analyze_video(video_path: str, cam_angle: str, output_path: str, json_path: str,
-                  top_range=20, bottom_range=20, untable_threshold=2.5, dips_threshold=20,weight=0.0):
+                  top_range=20, bottom_range=20, untable_threshold=5, dips_threshold=30,weight=0.0):
     # ---- 影片讀取參數 ----
     cam_angle = cam_angle
     print(f"獲得路徑: {video_path}")
@@ -91,6 +86,7 @@ def analyze_video(video_path: str, cam_angle: str, output_path: str, json_path: 
     frame_idx = 0
     rep_count = 0
     rep_data_list = []
+    abnormal_segments = []
 
     phase = "top"
     region = "top"
@@ -249,6 +245,13 @@ def analyze_video(video_path: str, cam_angle: str, output_path: str, json_path: 
                 concentric_time = (concentric_end - concentric_start)/fps
                 print("向心結束")
 
+                # 紀錄該次 REP 的實際影片時間點（秒）
+                start_time = eccentric_start / fps
+                end_time = concentric_end / fps
+
+                print("向心結束")
+                print(f"Rep 時間範圍: {start_time:.2f}s ~ {end_time:.2f}s")
+
                 # 判斷是否有回下陷（只要出現某一幀 WRy 又變大）
                 push_dips = False
                 for i in range(1, len(concentric_y_traj)):
@@ -262,6 +265,8 @@ def analyze_video(video_path: str, cam_angle: str, output_path: str, json_path: 
                               for i in range(1, len(concentric_y_traj))]
                 velocity_std = np.std(velocities)
                 speed_unstable = velocity_std > untable_threshold  # 可依你影片的實際值調整門檻
+
+
 
                 #計算功率
                 # 像素位移（往下值變大，取絕對值）
@@ -290,7 +295,9 @@ def analyze_video(video_path: str, cam_angle: str, output_path: str, json_path: 
                         speed_unstable=speed_unstable,
                         push_dips=push_dips,
                         power=user_power,
-                        rep=rep_count
+                        rep=rep_count,
+                        start_time=start_time,
+                        end_time=end_time
                     )
                     rep_data_list.append(bp)
                     print(f"第{rep_count}次存入:{bp}")
@@ -331,7 +338,7 @@ def analyze_video(video_path: str, cam_angle: str, output_path: str, json_path: 
     for rep_obj in rep_data_list:
         print(rep_obj)
 
-    # 匯出 json
+    # 匯出 組訓練.json
     rep_dict_list = [{
         "rep": r.rep,
         "weight": r.weight,
@@ -345,10 +352,43 @@ def analyze_video(video_path: str, cam_angle: str, output_path: str, json_path: 
         "speed_unstable": r.speed_unstable,
         "power":r.power,
         "push_dips": r.push_dips,
-        "score": r.score
+        "score": r.score,
+        "start_time": round(r.start_time, 2),
+        "end_time": round(r.end_time, 2)
     } for r in rep_data_list]
 
     df = pd.DataFrame(rep_dict_list)
     df.to_json(json_path,force_ascii=False, indent=2, orient="records")
-    print(f"✅ 已輸出到 json：{json_path}")
+    print(f"已輸出到 json：{json_path}")
+
+ # === 自動生成 _meta.json（異常片段） ===
+    for r in rep_data_list:
+        if r.speed_unstable or r.push_dips:
+            seg_type = []
+            if r.speed_unstable:
+                seg_type.append("unstable")
+            if r.push_dips:
+                seg_type.append("dip")
+            abnormal_segments.append({
+                "rep": r.rep,
+                "type": ",".join(seg_type),
+                "start_time": round(r.start_time, 2),
+                "end_time": round(r.end_time, 2),
+                "duration": round(r.end_time - r.start_time, 2)
+            })
+
+    meta = {
+        "summary": {
+            "total_reps": len(rep_dict_list),
+            "unstable_reps": sum(1 for r in rep_data_list if r.speed_unstable),
+            "dip_reps": sum(1 for r in rep_data_list if r.push_dips)
+        },
+        "abnormal_segments": abnormal_segments
+    }
+
+    meta_path = json_path.replace(".json", "_meta.json")
+    with open(meta_path, "w", encoding="utf-8") as f:
+        json.dump(meta, f, indent=2, ensure_ascii=False)
+
+    print(f"已輸出異常片段 meta：{meta_path}")
     return json_path, output_path

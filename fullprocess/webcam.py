@@ -3,48 +3,56 @@ import os
 import time
 
 def webcam_on(userid, stop_flags_dict, seconds=60):
-    # 開啟預設攝影機（通常是 webcam）
-    cap = cv2.VideoCapture(0)
 
-    # 檢查是否成功打開攝影機
+    cap = cv2.VideoCapture(0, cv2.CAP_DSHOW)
+    print("Camera opened:", cap.isOpened())
+
     if not cap.isOpened():
         print("無法開啟攝影機")
         return None
 
-    # 設定影片格式與輸出檔案
-    print("攝影機解析度:", cap.get(cv2.CAP_PROP_FRAME_WIDTH),
-          cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+    # 強制設定解析度（MP4V 最穩 720p）
+    cap.set(cv2.CAP_PROP_FRAME_WIDTH, 1280)
+    cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 720)
+
     width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
     height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
 
-    fourcc = cv2.VideoWriter_fourcc(*'mp4v')  # 視訊編碼格式
-    # 檔名, 格式, FPS, 畫面尺寸
-    output_path = os.path.join('../results', f'{userid}.mp4')
-    out = cv2.VideoWriter(output_path, fourcc, 30, (width, height))
+    print("使用錄影解析度:", width, "x", height)
 
+    fourcc = cv2.VideoWriter_fourcc(*'mp4v')
+
+    os.makedirs('../results', exist_ok=True)
+    output_path = os.path.join('../results', f'{userid}.mp4')
+
+    # 初始化 VideoWriter
+    out = cv2.VideoWriter(output_path, fourcc, 30, (width, height))
+    print("VideoWriter opened:", out.isOpened())
+
+    if not out.isOpened():
+        print("MP4 Writer 初始化失敗，請改用 AVI (MJPG)")
+        return None
+
+    # 開始錄影
     start_time = time.time()
     while time.time() - start_time < seconds:
+
+        # 偵測外部停止指令
         if stop_flags_dict.get(userid, False):
             print("偵測到停止指令")
             break
 
         ret, frame = cap.read()
         if not ret:
-            print("無法讀取畫面")
+            print("⚠無法讀取畫面")
             break
 
         out.write(frame)
 
-        # 顯示畫面
-        cv2.imshow('Webcam', frame)
-
-        # 按下 q 鍵離開
-        #if cv2.waitKey(1) & 0xFF == ord('q'):
-        #    break
-
-    # 釋放資源
+    # 收尾
     cap.release()
     out.release()
     cv2.destroyAllWindows()
-    print("webcam完成錄影")
-    return f".//{output_path}"
+    print("webcam 錄影完成:", output_path)
+
+    return output_path
