@@ -1,5 +1,6 @@
 import time
 from moviepy import VideoFileClip
+import hashlib
 
 from fastapi import FastAPI, Query, HTTPException
 from fastapi.responses import FileResponse
@@ -37,8 +38,11 @@ app.add_middleware(
 #檔案位置
 UPLOAD_DIR = "temp_videos"
 OUTPUT_DIR = "output"
+META_DIR = "./output/meta"
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 os.makedirs(OUTPUT_DIR, exist_ok=True)
+os.makedirs(META_DIR, exist_ok=True)
+
 
 #錄影全域變數
 #recording_threads = {}
@@ -140,17 +144,39 @@ def get_meta(uid: str = Query(..., description="Firebase UID")):
 # 異常影片片段
 @app.get("/video/clip")
 def get_video_clip(uid: str, start: float, end: float):
-    """回傳影片指定時間區段 (mp4)"""
+    """
+    回傳影片指定時間區段 (mp4)
+    自動快取，不會重複切片
+    """
     try:
         video_path = os.path.join(OUTPUT_DIR, f"{uid}_analyzed.mp4")
         if not os.path.exists(video_path):
             return {"error": f"Video for {uid} not found"}
 
-        # 剪輯暫存檔
-        out_path = os.path.join(OUTPUT_DIR, f"clip_{uid}_{uuid.uuid4().hex[:6]}.mp4")
-        clip = VideoFileClip(video_path).subclip(start, end)
-        clip.write_videofile(out_path, codec="libx264", audio=False, verbose=False, logger=None)
-        return FileResponse(out_path, media_type="video/mp4", filename=os.path.basename(out_path))
+        # 進行 padding 避免切得太短
+        pad_start = max(0, start - 0.3)
+        pad_end = end + 0.3
+
+        # 用 uid/start/end 做 hash
+        key_raw = f"{uid}_{pad_start:.2f}_{pad_end:.2f}"
+        key = hashlib.md5(key_raw.encode()).hexdigest()[:12]
+
+        out_path = os.path.join(META_DIR, f"clip_{key}.mp4")
+
+        # clip 已存在 → 不重切
+        if os.path.exists(out_path):
+            print("⚡ 使用快取 clip:", out_path)
+            return FileResponse(out_path, media_type="video/mp4")
+
+        # clip 不存在 → 切一次
+        print("✂ 正在切 clip:", pad_start, pad_end)
+        clip = VideoFileClip(video_path).subclipped(pad_start, pad_end)
+        clip.write_videofile(out_path, codec="libx264", audio=False)
+        clip.close()
+
+        print("✅ 新增 clip:", out_path)
+        return FileResponse(out_path, media_type="video/mp4")
+
     except Exception as e:
         return {"error": str(e)}
 

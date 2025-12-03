@@ -44,7 +44,7 @@ def webcam_on(userid, stop_flags_dict, seconds=60):
 
         ret, frame = cap.read()
         if not ret:
-            print("⚠無法讀取畫面")
+            print("無法讀取畫面")
             break
 
         out.write(frame)

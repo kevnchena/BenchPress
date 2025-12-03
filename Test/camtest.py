@@ -8,7 +8,7 @@ def webcam_on(userid, stop_flags_dict, seconds=60):
     print("Camera opened:", cap.isOpened())
 
     if not cap.isOpened():
-        print("❌ 無法開啟攝影機")
+        print("無法開啟攝影機")
         return None
 
     print("攝影機解析度:", cap.get(cv2.CAP_PROP_FRAME_WIDTH),
@@ -33,27 +33,27 @@ def webcam_on(userid, stop_flags_dict, seconds=60):
     while time.time() - start_time < seconds:
 
         if stop_flags_dict.get(userid, False):
-            print("🛑 偵測到停止指令")
+            print("偵測到停止指令")
             break
 
         ret, frame = cap.read()
         print("Frame read:", ret)
 
         if not ret:
-            print("⚠️ 無法讀取畫面")
+            print("無法讀取畫面")
             break
 
         out.write(frame)  # 寫入影片
 
         cv2.imshow("Webcam Test", frame)
         if cv2.waitKey(1) & 0xFF == ord('q'):
-            print("🛑 使用者手動退出")
+            print("使用者手動退出")
             break
 
     cap.release()
     out.release()
     cv2.destroyAllWindows()
-    print("🎬 webcam完成錄影")
+    print("webcam完成錄影")
 
     return output_path
 
@@ -77,6 +77,6 @@ if __name__ == "__main__":
         print(f"影片大小: {size / 1024:.2f} KB")
 
         if size > 1000:
-            print("✅ 影片看起來是正常的（大於 1MB）")
+            print("影片看起來是正常的（大於 1MB）")
         else:
-            print("❌ 影片太小，可能是空白的（失敗）")
+            print("影片太小，可能是空白的（失敗）")
