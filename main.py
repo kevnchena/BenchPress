@@ -45,9 +45,8 @@ os.makedirs(META_DIR, exist_ok=True)
 
 
 #錄影全域變數
-#recording_threads = {}
+user_done_events = {}
 stop_flags = {}
-done = threading.Event()
 
 # 主頁面使用
 class Route(BaseModel):
@@ -61,11 +60,12 @@ def record_and_analyze(user:Route):
     userid = user.userid
     weight = float(user.weight or 0)
     stop_flags[userid] = False #停止錄影flags
+    user_done_events[userid] = threading.Event()
     print(userid)
     print(user.weight)
 
     video_path = os.path.join(UPLOAD_DIR, f"{userid}.mp4")
-    thread = threading.Thread(target=run_full_process, args=(userid, weight , video_path, done))
+    thread = threading.Thread(target=run_full_process, args=(userid, weight , video_path, user_done_events[userid]))
     thread.start()
     return {"message": "錄影啟動", "user_id": userid}
 
@@ -80,12 +80,12 @@ def stop_recording(user:Route):
     #return FileResponse(json_path, media_type="application/json")
     if userid in stop_flags:
         stop_flags[userid] = True #停止錄影flags
-        done.wait()
+        user_done_events[userid].wait()
         print("分析完成，送出json")
         time.sleep(2)  #等待檔案建立安全時間
         return FileResponse(json_path, media_type="application/json")
     else:
-        done.wait()
+        user_done_events[userid].wait()
         print("分析失敗")
         return {"error": "<UNK>"}
 
