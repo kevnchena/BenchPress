@@ -10,3 +10,6 @@ Activate FastAPI
 FastAPI test UI
 http://localhost:8000/docs
 ---
+main.py為FastAPI主程式
+所有使用功能有分類在不同資料夾中
+fullprocess為主分析pipline
