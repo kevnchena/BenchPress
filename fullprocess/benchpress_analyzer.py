@@ -44,7 +44,7 @@ class BPPoint:
 
 
 def analyze_video(video_path: str, cam_angle: str, output_path: str, json_path: str,
-                  top_range=20, bottom_range=20, untable_threshold=5, dips_threshold=30,weight=0.0):
+                  top_range=20, bottom_range=25, untable_threshold=10, dips_threshold=30,weight=0.0):
     # ---- 影片讀取參數 ----
     cam_angle = cam_angle
     print(f"獲得路徑: {video_path}")
@@ -231,6 +231,7 @@ def analyze_video(video_path: str, cam_angle: str, output_path: str, json_path: 
                 concentric_start = frame_idx
                 concentric_y_traj = []
                 concentric_dip_frames = []  # 清空下陷紀錄
+                push_dips = False
                 # 紀錄底部時間
                 bottom_exit_frame = frame_idx
                 bottom_pause_time = (bottom_exit_frame - bottom_entry_frame) / fps
@@ -253,7 +254,6 @@ def analyze_video(video_path: str, cam_angle: str, output_path: str, json_path: 
                 print(f"Rep 時間範圍: {start_time:.2f}s ~ {end_time:.2f}s")
 
                 # 判斷是否有回下陷（只要出現某一幀 WRy 又變大）
-                push_dips = False
                 for i in range(1, len(concentric_y_traj)):
                     if concentric_y_traj[i] > concentric_y_traj[i-1]+dips_threshold:
                         push_dips = True
