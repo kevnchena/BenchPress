@@ -10,4 +10,3 @@ Activate FastAPI
 FastAPI test UI
 http://localhost:8000/docs
 ---
-userid 隨機產生，停止錄影、下載影片、下載 csv 檔案都需要 userid
